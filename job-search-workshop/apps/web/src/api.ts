@@ -18,12 +18,30 @@ export async function getSources(): Promise<Source[]> {
   return result.sources;
 }
 
-export async function getListings(search = ""): Promise<Listing[]> {
-  const query = search ? `?search=${encodeURIComponent(search)}` : "";
+export async function getListings(
+  search = "",
+  watchlisted = false,
+): Promise<Listing[]> {
+  const params = new URLSearchParams();
+  if (search) params.set("search", search);
+  if (watchlisted) params.set("watchlisted", "true");
+  const query = params.toString() ? `?${params.toString()}` : "";
   const result = await requestJson<{ listings: Listing[] }>(
     `/api/listings${query}`,
   );
   return result.listings;
+}
+
+export async function addToWatchlist(listingId: string): Promise<void> {
+  await requestJson(`/api/watchlist/${encodeURIComponent(listingId)}`, {
+    method: "POST",
+  });
+}
+
+export async function removeFromWatchlist(listingId: string): Promise<void> {
+  await requestJson(`/api/watchlist/${encodeURIComponent(listingId)}`, {
+    method: "DELETE",
+  });
 }
 
 export async function getLatestRun(): Promise<CollectionRun | null> {

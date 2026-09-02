@@ -18,6 +18,8 @@ Open `http://127.0.0.1:5173`. The web application proxies `/api` requests to the
 
 Mutable data is stored in the operating system's per-user application-data directory. Set `JOB_FINDER_DATA_DIR` to use a different directory during local development.
 
+To add six sample listings for local testing and demos, run `npm run seed:dev`. This is development-only data and writes to the same SQLite database selected by `JOB_FINDER_DATA_DIR`; running it again updates the existing sample rows.
+
 ## Validate
 
 ```powershell

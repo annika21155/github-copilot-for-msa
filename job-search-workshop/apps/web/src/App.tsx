@@ -5,12 +5,20 @@ import {
   Clock3,
   Database,
   ExternalLink,
+  Bookmark,
   MapPin,
   RefreshCw,
   Search,
 } from "lucide-react";
 
-import { getLatestRun, getListings, getSources, startCollection } from "./api";
+import {
+  addToWatchlist,
+  getLatestRun,
+  getListings,
+  getSources,
+  removeFromWatchlist,
+  startCollection,
+} from "./api";
 import type { CollectionRun, Listing, Source } from "./types";
 
 function formatTimestamp(value: string | null): string {
@@ -28,6 +36,7 @@ export default function App() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [run, setRun] = useState<CollectionRun | null>(null);
   const [search, setSearch] = useState("");
+  const [watchlistOnly, setWatchlistOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [collecting, setCollecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,7 +92,7 @@ export default function App() {
     }, 750);
 
     return () => window.clearInterval(timer);
-  }, [run?.status]);
+  }, [run?.status, search, watchlistOnly]);
 
   async function handleCollection(): Promise<void> {
     setError(null);
@@ -104,10 +113,40 @@ export default function App() {
     event.preventDefault();
     setError(null);
     try {
-      setListings(await getListings(search.trim()));
+      setListings(await getListings(search.trim(), watchlistOnly));
     } catch (searchError) {
       setError(
         searchError instanceof Error ? searchError.message : "Search failed.",
+      );
+    }
+  }
+
+  async function handleWatchlistToggle(listing: Listing): Promise<void> {
+    setError(null);
+    try {
+      if (listing.watchlisted) {
+        await removeFromWatchlist(listing.id);
+      } else {
+        await addToWatchlist(listing.id);
+      }
+      if (watchlistOnly && listing.watchlisted) {
+        setListings((current) =>
+          current.filter((item) => item.id !== listing.id),
+        );
+      } else {
+        setListings((current) =>
+          current.map((item) =>
+            item.id === listing.id
+              ? { ...item, watchlisted: !item.watchlisted }
+              : item,
+          ),
+        );
+      }
+    } catch (toggleError: unknown) {
+      setError(
+        toggleError instanceof Error
+          ? toggleError.message
+          : "Unable to update watchlist.",
       );
     }
   }
@@ -233,6 +272,26 @@ export default function App() {
               />
               <button type="submit">Search</button>
             </form>
+            <label className="watchlist-filter">
+              <input
+                checked={watchlistOnly}
+                onChange={(event) => {
+                  const nextValue = event.target.checked;
+                  setWatchlistOnly(nextValue);
+                  void getListings(search.trim(), nextValue)
+                    .then(setListings)
+                    .catch((filterError: unknown) => {
+                      setError(
+                        filterError instanceof Error
+                          ? filterError.message
+                          : "Unable to filter watchlist.",
+                      );
+                    });
+                }}
+                type="checkbox"
+              />
+              Watchlist only
+            </label>
           </div>
 
           {loading ? (
@@ -258,6 +317,7 @@ export default function App() {
                     <th>Company</th>
                     <th>Location</th>
                     <th>Freshness</th>
+                    <th aria-label="Watchlist" />
                     <th aria-label="Open source" />
                   </tr>
                 </thead>
@@ -278,6 +338,30 @@ export default function App() {
                         <span className={`listing-status ${listing.status}`}>
                           {listing.status}
                         </span>
+                      </td>
+                      <td>
+                        <button
+                          aria-label={`${listing.watchlisted ? "Remove" : "Add"} ${listing.title} ${listing.watchlisted ? "from" : "to"} watchlist`}
+                          className={`icon-link watchlist-button${listing.watchlisted ? " selected" : ""}`}
+                          onClick={() => void handleWatchlistToggle(listing)}
+                          title={
+                            listing.watchlisted
+                              ? "Remove from watchlist"
+                              : "Add to watchlist"
+                          }
+                          type="button"
+                        >
+                          <Bookmark
+                            fill={listing.watchlisted ? "currentColor" : "none"}
+                            size={17}
+                            aria-hidden="true"
+                          />
+                        </button>
+                        {listing.watchlisted && listing.status !== "active" && (
+                          <span className="saved-status">
+                            Saved listing is {listing.status}.
+                          </span>
+                        )}
                       </td>
                       <td>
                         <a
