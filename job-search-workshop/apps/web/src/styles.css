@@ -277,6 +277,19 @@ main {
 }
 
 .search-form {
+  .watchlist-filter {
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+    color: var(--ink);
+    font-size: 0.86rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .watchlist-filter input {
+    accent-color: var(--teal);
+  }
   display: grid;
   grid-template-columns: 20px minmax(180px, 320px) auto;
   gap: 8px;
@@ -391,6 +404,23 @@ td {
 .icon-link:focus-visible {
   background: #dcece8;
   outline: none;
+}
+
+.watchlist-button.selected {
+  color: #9a6a00;
+}
+
+.watchlist-button.selected:hover,
+.watchlist-button.selected:focus-visible {
+  background: #fff0c9;
+}
+
+.saved-status {
+  display: block;
+  margin-top: 4px;
+  color: #70500a;
+  font-size: 0.72rem;
+  white-space: nowrap;
 }
 
 .spin {

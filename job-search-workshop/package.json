@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "dev": "concurrently --kill-others-on-fail --names api,web \"npm run dev --workspace @job-finder/api\" \"npm run dev --workspace @job-finder/web\"",
+    "seed:dev": "tsx scripts/seed-dev-data.ts",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",

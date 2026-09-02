@@ -53,7 +53,7 @@ export class JobFinderRepository {
 
   public listListings(filters: ListingFilters = {}): Listing[] {
     const clauses: string[] = [];
-    const parameters: Record<string, string> = {};
+    const parameters: Record<string, string | number> = {};
 
     if (filters.search) {
       clauses.push(
@@ -73,12 +73,19 @@ export class JobFinderRepository {
       clauses.push("source_id = @sourceId");
       parameters.sourceId = filters.sourceId;
     }
+    if (filters.watchlisted) {
+      clauses.push(
+        "EXISTS (SELECT 1 FROM watchlist WHERE watchlist.listing_id = listings.id)",
+      );
+    }
 
     const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
     const rows = this.database
       .prepare(
         `SELECT id, source_id, company_name, title, location, summary, posted_at,
-                source_url, first_seen_at, last_seen_at, status
+          source_url, first_seen_at, last_seen_at, status,
+          EXISTS (SELECT 1 FROM watchlist WHERE watchlist.listing_id = listings.id)
+            AS watchlisted
          FROM listings
          ${where}
          ORDER BY last_seen_at DESC, title`,
@@ -97,7 +104,77 @@ export class JobFinderRepository {
       firstSeenAt: String(row.first_seen_at),
       lastSeenAt: String(row.last_seen_at),
       status: String(row.status) as Listing["status"],
+      watchlisted: Boolean(row.watchlisted) || false,
     }));
+  }
+
+  public upsertListings(listings: Listing[]): void {
+    const upsert = this.database.prepare(
+      `INSERT INTO listings
+         (id, source_id, company_name, title, location, summary, posted_at,
+          source_url, first_seen_at, last_seen_at, status)
+       VALUES
+         (@id, @sourceId, @companyName, @title, @location, @summary, @postedAt,
+          @sourceUrl, @firstSeenAt, @lastSeenAt, @status)
+       ON CONFLICT(id) DO UPDATE SET
+         source_id = excluded.source_id,
+         company_name = excluded.company_name,
+         title = excluded.title,
+         location = excluded.location,
+         summary = excluded.summary,
+         posted_at = excluded.posted_at,
+         source_url = excluded.source_url,
+         last_seen_at = excluded.last_seen_at,
+         status = excluded.status`,
+    );
+
+    const save = this.database.transaction((items: Listing[]) => {
+      for (const listing of items) {
+        upsert.run({ ...listing });
+      }
+    });
+
+    save(listings);
+  }
+
+  public markListingsUnavailable(
+    sourceId: string,
+    confirmedListingIds: string[],
+  ): void {
+    const placeholders = confirmedListingIds.map(() => "?").join(", ");
+    const parameters = [sourceId, ...confirmedListingIds];
+    this.database
+      .prepare(
+        `UPDATE listings
+         SET status = 'unavailable'
+         WHERE source_id = ?
+           ${placeholders ? `AND id NOT IN (${placeholders})` : ""}`,
+      )
+      .run(...parameters);
+  }
+
+  public addToWatchlist(listingId: string): void {
+    this.database
+      .prepare(
+        `INSERT INTO watchlist (listing_id, added_at)
+         VALUES (?, ?)
+         ON CONFLICT(listing_id) DO NOTHING`,
+      )
+      .run(listingId, new Date().toISOString());
+  }
+
+  public removeFromWatchlist(listingId: string): void {
+    this.database
+      .prepare("DELETE FROM watchlist WHERE listing_id = ?")
+      .run(listingId);
+  }
+
+  public listingExists(listingId: string): boolean {
+    return Boolean(
+      this.database
+        .prepare("SELECT 1 FROM listings WHERE id = ?")
+        .get(listingId),
+    );
   }
 
   public createCollectionRun(sourceCount: number): CollectionRun {
@@ -212,6 +289,11 @@ export class JobFinderRepository {
         first_seen_at TEXT NOT NULL,
         last_seen_at TEXT NOT NULL,
         status TEXT NOT NULL CHECK (status IN ('active', 'stale', 'unavailable'))
+      );
+
+      CREATE TABLE IF NOT EXISTS watchlist (
+        listing_id TEXT PRIMARY KEY,
+        added_at TEXT NOT NULL
       );
 
       CREATE TABLE IF NOT EXISTS collection_runs (

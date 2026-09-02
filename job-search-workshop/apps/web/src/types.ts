@@ -20,6 +20,7 @@ export interface Listing {
   firstSeenAt: string;
   lastSeenAt: string;
   status: "active" | "stale" | "unavailable";
+  watchlisted: boolean;
 }
 
 export interface CollectionRun {
